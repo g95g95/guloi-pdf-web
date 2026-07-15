@@ -30,6 +30,7 @@ import { clamp } from "./coords";
 import type { HistoryAction } from "./history";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FormFieldsPanel, type PanelField } from "./FormFieldsPanel";
+import { SignatureDialog } from "./SignatureDialog";
 import { historyReducer, initialHistory } from "./history";
 import { PageView } from "./PageView";
 import { Toolbar, type ToolId } from "./Toolbar";
@@ -74,6 +75,7 @@ export function EditorView({ file, onClose }: EditorViewProps) {
   const [activeSignatureKey, setActiveSignatureKey] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [sigDialogOpen, setSigDialogOpen] = useState(false);
   const { state: save, submit, reset } = useToolUpload("/api/editor/save");
   const sigInputRef = useRef<HTMLInputElement>(null);
   const sigCounterRef = useRef(0);
@@ -220,9 +222,9 @@ export function EditorView({ file, onClose }: EditorViewProps) {
   function onToolChange(next: ToolId) {
     setTool(next);
     dispatch({ type: "select", id: null });
-    // Selecting the signature tool with no image yet → open the picker.
+    // Selecting the signature tool with none yet → open the creation dialog.
     if (next === "signature" && signatures.length === 0) {
-      sigInputRef.current?.click();
+      setSigDialogOpen(true);
     }
   }
 
@@ -252,6 +254,7 @@ export function EditorView({ file, onClose }: EditorViewProps) {
       setActiveSignatureKey(key);
     };
     img.src = url;
+    setSigDialogOpen(false);
   }
 
   function buildPayload(): { annotations: EditorAnnotation[]; formData: FormData } {
@@ -334,10 +337,10 @@ export function EditorView({ file, onClose }: EditorViewProps) {
         <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg-elevated px-3 py-2 text-xs text-fg-muted">
           <button
             type="button"
-            onClick={() => sigInputRef.current?.click()}
+            onClick={() => setSigDialogOpen(true)}
             className="rounded-sm font-medium text-accent underline underline-offset-4 hover:text-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {t("editor.signature.upload")}
+            {t("editor.signature.add")}
           </button>
           {signatures.length > 0 && (
             <div className="flex items-center gap-2">
@@ -406,6 +409,13 @@ export function EditorView({ file, onClose }: EditorViewProps) {
           <FormFieldsPanel fields={panelFields} onEdit={editFormField} />
         </aside>
       </div>
+
+      <SignatureDialog
+        open={sigDialogOpen}
+        onClose={() => setSigDialogOpen(false)}
+        onCreate={addSignatureFile}
+        onPickImage={() => sigInputRef.current?.click()}
+      />
 
       <ConfirmDialog
         open={confirmOpen}
