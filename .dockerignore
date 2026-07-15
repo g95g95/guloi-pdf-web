@@ -1,0 +1,27 @@
+# --- Frontend ---
+frontend/node_modules
+frontend/dist
+frontend/.vite
+frontend/coverage
+
+# --- Backend ---
+backend/__pycache__
+backend/**/__pycache__
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+backend/tests
+backend/.venv
+backend/venv
+
+# --- Common ---
+**/*.pyc
+.git
+.gitignore
+.dockerignore
+*.md
+!README.md
+.vscode
+.idea
+.DS_Store
+Thumbs.db

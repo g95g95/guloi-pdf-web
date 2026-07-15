@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: guloi-pdf-web
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: frankfurt
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
