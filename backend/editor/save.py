@@ -63,7 +63,21 @@ def save_document(state: DocumentState, output: Path) -> SaveResult:
                     page.merge_page(overlay_reader.pages[0])
         if form_values:
             try:
-                writer.update_page_form_field_values(None, form_values)
+                # I campi bottone (/Btn: checkbox e radio) vogliono il valore
+                # come PDF name ("/Yes", "/Off"), non come stringa di testo.
+                fields_meta = reader.get_fields() or {}
+                normalized = {
+                    name: (
+                        f"/{value}"
+                        if value
+                        and not value.startswith("/")
+                        and name in fields_meta
+                        and str(fields_meta[name].field_type) == "/Btn"
+                        else value
+                    )
+                    for name, value in form_values.items()
+                }
+                writer.update_page_form_field_values(None, normalized)
             except Exception:
                 pass
 

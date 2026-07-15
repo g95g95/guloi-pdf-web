@@ -21,14 +21,21 @@ export interface PdfPageInfo {
   height: number;
 }
 
+export type FormFieldType = "text" | "checkbox" | "radio" | "choice";
+
 export interface FormFieldSpec {
   name: string;
-  /** Current value stored in the PDF. */
+  type: FormFieldType;
+  /** Current value stored in the PDF (no leading slash; "Off" = unchecked). */
   value: string;
   /** 0-based page of this widget. */
   page: number;
   /** Widget rect in PDF points, bottom-left origin, normalized [x0,y0,x1,y1]. */
   rect: [number, number, number, number];
+  /** checkbox/radio: this widget's "on" export value. */
+  exportValue?: string;
+  /** choice: the selectable options. */
+  options?: { value: string; label: string }[];
 }
 
 export type PdfDocumentState =
@@ -87,28 +94,60 @@ export function usePdfDocument(file: File | null): UsePdfDocument {
           pagesRef.current.set(i - 1, page);
           const viewport = page.getViewport({ scale: 1 });
           pages.push({ width: viewport.width, height: viewport.height });
-          // Editable text widgets: drawn as live inputs by PageView (the
-          // canvas render skips their appearance via ENABLE_FORMS below).
+          // Editable widgets (text, checkbox, radio, dropdown): drawn as live
+          // inputs by PageView (the canvas render skips their appearance via
+          // ENABLE_FORMS below). Values are kept slash-free ("Off", "Yes").
+          const noSlash = (v: unknown): string =>
+            typeof v === "string" ? v.replace(/^\//, "") : "";
           for (const a of await page.getAnnotations()) {
             if (
-              a.subtype === "Widget" &&
-              a.fieldType === "Tx" &&
-              typeof a.fieldName === "string" &&
-              a.fieldName &&
-              !a.readOnly &&
-              Array.isArray(a.rect)
+              a.subtype !== "Widget" ||
+              typeof a.fieldName !== "string" ||
+              !a.fieldName ||
+              a.readOnly ||
+              !Array.isArray(a.rect)
             ) {
-              const [ax0, ay0, ax1, ay1] = a.rect as number[];
+              continue;
+            }
+            const [ax0, ay0, ax1, ay1] = a.rect as number[];
+            const base = {
+              name: a.fieldName as string,
+              page: i - 1,
+              rect: [
+                Math.min(ax0 ?? 0, ax1 ?? 0),
+                Math.min(ay0 ?? 0, ay1 ?? 0),
+                Math.max(ax0 ?? 0, ax1 ?? 0),
+                Math.max(ay0 ?? 0, ay1 ?? 0),
+              ] as [number, number, number, number],
+            };
+            if (a.fieldType === "Tx") {
+              formFields.push({ ...base, type: "text", value: noSlash(a.fieldValue) });
+            } else if (a.fieldType === "Btn" && a.checkBox) {
               formFields.push({
-                name: a.fieldName,
-                value: typeof a.fieldValue === "string" ? a.fieldValue : "",
-                page: i - 1,
-                rect: [
-                  Math.min(ax0 ?? 0, ax1 ?? 0),
-                  Math.min(ay0 ?? 0, ay1 ?? 0),
-                  Math.max(ax0 ?? 0, ax1 ?? 0),
-                  Math.max(ay0 ?? 0, ay1 ?? 0),
-                ],
+                ...base,
+                type: "checkbox",
+                value: noSlash(a.fieldValue) || "Off",
+                exportValue: noSlash(a.exportValue) || "Yes",
+              });
+            } else if (a.fieldType === "Btn" && a.radioButton) {
+              formFields.push({
+                ...base,
+                type: "radio",
+                value: noSlash(a.fieldValue),
+                exportValue: noSlash(a.buttonValue),
+              });
+            } else if (a.fieldType === "Ch" && Array.isArray(a.options)) {
+              const raw = Array.isArray(a.fieldValue) ? a.fieldValue[0] : a.fieldValue;
+              formFields.push({
+                ...base,
+                type: "choice",
+                value: noSlash(raw),
+                options: (a.options as { exportValue?: string; displayValue?: string }[])
+                  .map((o) => ({
+                    value: o.exportValue ?? o.displayValue ?? "",
+                    label: o.displayValue ?? o.exportValue ?? "",
+                  }))
+                  .filter((o) => o.value !== ""),
               });
             }
           }

@@ -24,7 +24,7 @@ vi.mock("./usePdfDocument", () => ({
             { width: 600, height: 800 },
           ],
           formFields: [
-            { name: "nome", value: "", page: 0, rect: [100, 700, 300, 724] },
+            { name: "nome", type: "text", value: "", page: 0, rect: [100, 700, 300, 724] },
           ],
         }
       : { status: "idle" },

@@ -29,7 +29,7 @@ import {
 import { clamp } from "./coords";
 import type { HistoryAction } from "./history";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { FormFieldsPanel } from "./FormFieldsPanel";
+import { FormFieldsPanel, type PanelField } from "./FormFieldsPanel";
 import { historyReducer, initialHistory } from "./history";
 import { PageView } from "./PageView";
 import { Toolbar, type ToolId } from "./Toolbar";
@@ -112,12 +112,32 @@ export function EditorView({ file, onClose }: EditorViewProps) {
   const editFormField = useCallback((name: string, value: string) => {
     setFormValues((prev) => ({ ...prev, [name]: value }));
   }, []);
-  /** Unique field names with their live values, for the side panel. */
+  /** One entry per field name with its live value; radio groups aggregate
+      every widget's export value so the panel can list all the options. */
   const panelFields = useMemo(() => {
-    const seen = new Set<string>();
-    return formFields
-      .filter((f) => (seen.has(f.name) ? false : (seen.add(f.name), true)))
-      .map((f) => ({ name: f.name, value: formValues[f.name] ?? "" }));
+    const byName = new Map<string, PanelField>();
+    for (const f of formFields) {
+      const existing = byName.get(f.name);
+      if (!existing) {
+        const pf: PanelField = {
+          name: f.name,
+          type: f.type,
+          value: formValues[f.name] ?? "",
+        };
+        if (f.exportValue !== undefined) pf.exportValue = f.exportValue;
+        if (f.options !== undefined) pf.options = f.options;
+        if (f.type === "radio") pf.radioValues = f.exportValue ? [f.exportValue] : [];
+        byName.set(f.name, pf);
+      } else if (
+        f.type === "radio" &&
+        f.exportValue &&
+        existing.radioValues &&
+        !existing.radioValues.includes(f.exportValue)
+      ) {
+        existing.radioValues.push(f.exportValue);
+      }
+    }
+    return [...byName.values()];
   }, [formFields, formValues]);
 
   // Large-document warning (once).

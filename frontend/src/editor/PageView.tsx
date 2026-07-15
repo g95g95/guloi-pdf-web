@@ -348,31 +348,95 @@ export function PageView({
         {formFields.map((f) => {
           const [x0, y0, x1, y1] = f.rect;
           const h = y1 - y0;
-          return (
-            <input
-              key={`${f.name}:${x0},${y0}`}
-              type="text"
-              aria-label={f.name}
-              data-testid={`form-widget-${f.name}`}
-              value={formValues[f.name] ?? ""}
-              maxLength={1000}
-              onChange={(e) => onFormEdit(f.name, e.target.value)}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="absolute rounded-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              style={{
-                left: x0 * scale,
-                top: (heightPts - y1) * scale,
-                width: (x1 - x0) * scale,
-                height: h * scale,
-                fontSize: Math.max(8, h * 0.62) * scale,
-                paddingInline: 2 * scale,
-                pointerEvents: tool === "select" ? "auto" : "none",
-                border: "1px solid rgba(37, 99, 235, 0.5)",
-                background: "rgba(37, 99, 235, 0.07)",
-                color: "#111827",
-              }}
-            />
-          );
+          const v = formValues[f.name] ?? "";
+          const key = `${f.name}:${x0},${y0}`;
+          const box = {
+            left: x0 * scale,
+            top: (heightPts - y1) * scale,
+            width: (x1 - x0) * scale,
+            height: h * scale,
+            pointerEvents: tool === "select" ? ("auto" as const) : ("none" as const),
+          };
+          const frame = {
+            border: "1px solid rgba(37, 99, 235, 0.5)",
+            background: "rgba(37, 99, 235, 0.07)",
+            color: "#111827",
+          };
+          const cls =
+            "absolute rounded-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+          const stop = (e: React.PointerEvent) => e.stopPropagation();
+          switch (f.type) {
+            case "checkbox": {
+              const on = f.exportValue ?? "Yes";
+              return (
+                <input
+                  key={key}
+                  type="checkbox"
+                  aria-label={f.name}
+                  data-testid={`form-widget-${f.name}`}
+                  checked={v === on}
+                  onChange={(e) => onFormEdit(f.name, e.target.checked ? on : "Off")}
+                  onPointerDown={stop}
+                  className={cls}
+                  style={{ ...box, accentColor: "#2563eb", margin: 0 }}
+                />
+              );
+            }
+            case "radio":
+              return (
+                <input
+                  key={key}
+                  type="radio"
+                  aria-label={`${f.name}: ${f.exportValue ?? ""}`}
+                  data-testid={`form-widget-${f.name}-${f.exportValue ?? ""}`}
+                  name={`page-ff-${f.name}`}
+                  checked={v === f.exportValue}
+                  onChange={() => onFormEdit(f.name, f.exportValue ?? "")}
+                  onPointerDown={stop}
+                  className={cls}
+                  style={{ ...box, accentColor: "#2563eb", margin: 0 }}
+                />
+              );
+            case "choice":
+              return (
+                <select
+                  key={key}
+                  aria-label={f.name}
+                  data-testid={`form-widget-${f.name}`}
+                  value={v}
+                  onChange={(e) => onFormEdit(f.name, e.target.value)}
+                  onPointerDown={stop}
+                  className={cls}
+                  style={{ ...box, ...frame, fontSize: Math.max(8, h * 0.55) * scale }}
+                >
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              );
+            default:
+              return (
+                <input
+                  key={key}
+                  type="text"
+                  aria-label={f.name}
+                  data-testid={`form-widget-${f.name}`}
+                  value={v}
+                  maxLength={1000}
+                  onChange={(e) => onFormEdit(f.name, e.target.value)}
+                  onPointerDown={stop}
+                  className={cls}
+                  style={{
+                    ...box,
+                    ...frame,
+                    fontSize: Math.max(8, h * 0.62) * scale,
+                    paddingInline: 2 * scale,
+                  }}
+                />
+              );
+          }
         })}
       </div>
 

@@ -127,6 +127,44 @@ def test_save_form_field_annotation(client):
     assert fields.get("nome") == "Mario"
 
 
+def _rich_form_pdf_bytes():
+    """PDF con checkbox, radio (2 opzioni) e menu a tendina."""
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf)
+    c.acroForm.checkbox(name="privacy", x=100, y=700, size=16)
+    c.acroForm.radio(name="colore", value="rosso", x=100, y=650, size=16)
+    c.acroForm.radio(name="colore", value="blu", x=140, y=650, size=16)
+    c.acroForm.choice(
+        name="taglia", options=["S", "M", "L"], value="S",
+        x=100, y=600, width=120, height=22,
+    )
+    c.showPage()  # senza, reportlab non risolve i riferimenti dei widget
+    c.save()
+    return buf.getvalue()
+
+
+def test_save_checkbox_radio_choice_values(client):
+    r = _post_save(client, _rich_form_pdf_bytes(), [
+        {"kind": "form_field", "page": 0, "field_name": "privacy", "value": "Yes"},
+        {"kind": "form_field", "page": 0, "field_name": "colore", "value": "blu"},
+        {"kind": "form_field", "page": 0, "field_name": "taglia", "value": "L"},
+    ])
+    assert r.status_code == 200
+    fields = PdfReader(io.BytesIO(r.content)).get_fields()
+    assert str(fields["privacy"].value).lstrip("/") == "Yes"
+    assert str(fields["colore"].value).lstrip("/") == "blu"
+    assert str(fields["taglia"].value).lstrip("/") == "L"
+
+
+def test_save_checkbox_unchecked_value_off(client):
+    r = _post_save(client, _rich_form_pdf_bytes(), [
+        {"kind": "form_field", "page": 0, "field_name": "privacy", "value": "Off"},
+    ])
+    assert r.status_code == 200
+    fields = PdfReader(io.BytesIO(r.content)).get_fields()
+    assert str(fields["privacy"].value or "Off").lstrip("/") == "Off"
+
+
 def test_save_invalid_annotations_json_422(client):
     r = client.post(
         "/api/editor/save",
