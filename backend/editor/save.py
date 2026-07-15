@@ -81,6 +81,11 @@ def save_document(state: DocumentState, output: Path) -> SaveResult:
             except Exception:
                 pass
 
+        # I merge di pypdf lasciano i content stream NON compressi: senza
+        # questo passaggio il PDF salvato può pesare 10x il necessario.
+        for page in writer.pages:
+            page.compress_content_streams()
+
         output.parent.mkdir(parents=True, exist_ok=True)
         with open(output, "wb") as fh:
             writer.write(fh)

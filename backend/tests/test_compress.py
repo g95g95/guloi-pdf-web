@@ -46,6 +46,52 @@ def test_compress_produces_smaller_or_equal(tmp_path, tiny_pdf):
     assert result.compressed_size > 0
 
 
+def _text_heavy_pdf(tmp_path):
+    """PDF con un content stream grosso NON compresso (come l'output editor)."""
+    import pikepdf
+
+    ops = b"BT /F1 8 Tf " + b" ".join(
+        b"1 0 0 1 %d %d Tm (riga di testo numero %d) Tj" % (10 + i % 50, 800 - i % 700, i)
+        for i in range(20000)
+    ) + b" ET"
+    pdf = pikepdf.new()
+    page = pdf.add_blank_page(page_size=(595, 842))
+    page.Contents = pdf.make_stream(ops)
+    page.Resources = pikepdf.Dictionary(
+        Font=pikepdf.Dictionary(
+            F1=pikepdf.Dictionary(
+                Type=pikepdf.Name.Font, Subtype=pikepdf.Name.Type1,
+                BaseFont=pikepdf.Name.Helvetica,
+            )
+        )
+    )
+    path = tmp_path / "testo.pdf"
+    pdf.save(str(path), compress_streams=False)
+    return path
+
+
+def test_lossless_recompresses_raw_content_streams(tmp_path):
+    """Regression: normalize_content=True scriveva i content stream NON
+    compressi — su PDF pieni di testo la 'compressione' li gonfiava."""
+    src = _text_heavy_pdf(tmp_path)
+    out = tmp_path / "out.pdf"
+    result = compress_pdf(src, out)
+    assert result.ok is True
+    assert result.compressed_size < result.original_size * 0.5, (
+        f"content stream non ricompresso: {result.original_size} -> "
+        f"{result.compressed_size}"
+    )
+
+
+def test_compress_never_returns_larger_file(tmp_path, tiny_pdf):
+    """Se il 'compresso' è più grande dell'originale, tieni l'originale."""
+    src = tiny_pdf("gia_ottimo.pdf", pages=1)
+    out = tmp_path / "out.pdf"
+    result = compress_pdf(src, out)
+    assert result.ok is True
+    assert result.compressed_size <= result.original_size
+
+
 def test_compress_missing_source(tmp_path):
     out = tmp_path / "c.pdf"
     result = compress_pdf(tmp_path / "nope.pdf", out)

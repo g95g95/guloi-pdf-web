@@ -1,3 +1,4 @@
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -22,6 +23,7 @@ def compress_pdf(
     image_quality: int = 75,
 ) -> CompressResult:
     tmp = None
+    original_source = source
     try:
         if not source.exists():
             return CompressResult(ok=False, error=f"File non trovato: {source}")
@@ -42,12 +44,20 @@ def compress_pdf(
             source = tmp
 
         with pikepdf.open(str(source)) as pdf:
+            # NIENTE normalize_content: è un'opzione di debug di qpdf che
+            # scrive i content stream NON compressi — su PDF ricchi di testo
+            # o vettoriale la "compressione" gonfiava il file.
             pdf.save(
                 str(output),
                 object_stream_mode=pikepdf.ObjectStreamMode.generate,
                 compress_streams=True,
-                normalize_content=True,
+                recompress_flate=True,
             )
+
+        # La compressione non deve mai peggiorare: se il risultato supera
+        # l'originale (file già ottimizzato), consegna l'originale.
+        if output.stat().st_size >= original:
+            shutil.copyfile(str(original_source), str(output))
         return CompressResult(
             ok=True,
             original_size=original,

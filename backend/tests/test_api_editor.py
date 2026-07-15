@@ -165,6 +165,24 @@ def test_save_checkbox_unchecked_value_off(client):
     assert str(fields["privacy"].value or "Off").lstrip("/") == "Off"
 
 
+def test_save_output_content_streams_are_compressed(client):
+    """Regression: il PDF salvato aveva content stream non compressi (il file
+    di un utente pesava 1,35 MB invece di ~140 KB)."""
+    import pikepdf
+
+    r = _post_save(client, _pdf_bytes(), [
+        {"kind": "text", "page": 0, "x": 100, "y": 400,
+         "text": "annotazione", "font_size": 12, "color": [0, 0, 0]},
+    ])
+    assert r.status_code == 200
+    with pikepdf.open(io.BytesIO(r.content)) as pdf:
+        for page in pdf.pages:
+            contents = page.Contents
+            streams = list(contents) if isinstance(contents, pikepdf.Array) else [contents]
+            for s in streams:
+                assert s.get("/Filter") is not None, "content stream non compresso"
+
+
 def test_save_invalid_annotations_json_422(client):
     r = client.post(
         "/api/editor/save",
