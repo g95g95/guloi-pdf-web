@@ -25,6 +25,7 @@ import {
 import type { HistoryAction } from "./history";
 import { Overlay } from "./Overlay";
 import type { ToolId } from "./Toolbar";
+import type { FormFieldSpec } from "./usePdfDocument";
 import { useT } from "../lib/i18n";
 import { Button } from "../components/ui";
 
@@ -54,6 +55,10 @@ export interface PageViewProps {
   signatureUrls: Readonly<Record<string, string>>;
   activeSignature: { key: string; aspectRatio: number } | null;
   dispatch: (action: HistoryAction) => void;
+  /** Editable text widgets on THIS page (PDF-point rects). */
+  formFields: FormFieldSpec[];
+  formValues: Readonly<Record<string, string>>;
+  onFormEdit: (name: string, value: string) => void;
 }
 
 export function PageView({
@@ -70,6 +75,9 @@ export function PageView({
   signatureUrls,
   activeSignature,
   dispatch,
+  formFields,
+  formValues,
+  onFormEdit,
 }: PageViewProps) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -333,6 +341,39 @@ export function PageView({
           onAnnotationPointerDown={onAnnotationPointerDown}
           onResizePointerDown={onResizePointerDown}
         />
+
+        {/* Live form-field widgets: same state as the side panel. Fixed
+            colors on purpose — the page is always white, theme-independent.
+            Inert while a drawing tool is active so gestures pass through. */}
+        {formFields.map((f) => {
+          const [x0, y0, x1, y1] = f.rect;
+          const h = y1 - y0;
+          return (
+            <input
+              key={`${f.name}:${x0},${y0}`}
+              type="text"
+              aria-label={f.name}
+              data-testid={`form-widget-${f.name}`}
+              value={formValues[f.name] ?? ""}
+              maxLength={1000}
+              onChange={(e) => onFormEdit(f.name, e.target.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="absolute rounded-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              style={{
+                left: x0 * scale,
+                top: (heightPts - y1) * scale,
+                width: (x1 - x0) * scale,
+                height: h * scale,
+                fontSize: Math.max(8, h * 0.62) * scale,
+                paddingInline: 2 * scale,
+                pointerEvents: tool === "select" ? "auto" : "none",
+                border: "1px solid rgba(37, 99, 235, 0.5)",
+                background: "rgba(37, 99, 235, 0.07)",
+                color: "#111827",
+              }}
+            />
+          );
+        })}
       </div>
 
       {pendingText && (

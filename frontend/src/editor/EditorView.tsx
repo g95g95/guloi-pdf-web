@@ -72,7 +72,7 @@ export function EditorView({ file, onClose }: EditorViewProps) {
   const [scale, setScale] = useState(1);
   const [signatures, setSignatures] = useState<SignatureAsset[]>([]);
   const [activeSignatureKey, setActiveSignatureKey] = useState<string | null>(null);
-  const [formChanges, setFormChanges] = useState<{ name: string; value: string }[]>([]);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const { state: save, submit, reset } = useToolUpload("/api/editor/save");
   const sigInputRef = useRef<HTMLInputElement>(null);
@@ -95,6 +95,30 @@ export function EditorView({ file, onClose }: EditorViewProps) {
     },
     [atCap, toast, t],
   );
+
+  // Single source of truth for form-field values, shared by the panel and
+  // the on-page widget inputs. Initialized ONCE per document from the PDF's
+  // own values — never re-run afterwards, or user edits would be reset.
+  const formFields = useMemo(
+    () => (doc.status === "ready" ? (doc.formFields ?? []) : []),
+    [doc],
+  );
+  const formInitRef = useRef<File | null>(null);
+  useEffect(() => {
+    if (doc.status !== "ready" || formInitRef.current === file) return;
+    formInitRef.current = file;
+    setFormValues(Object.fromEntries(formFields.map((f) => [f.name, f.value])));
+  }, [doc.status, formFields, file]);
+  const editFormField = useCallback((name: string, value: string) => {
+    setFormValues((prev) => ({ ...prev, [name]: value }));
+  }, []);
+  /** Unique field names with their live values, for the side panel. */
+  const panelFields = useMemo(() => {
+    const seen = new Set<string>();
+    return formFields
+      .filter((f) => (seen.has(f.name) ? false : (seen.add(f.name), true)))
+      .map((f) => ({ name: f.name, value: formValues[f.name] ?? "" }));
+  }, [formFields, formValues]);
 
   // Large-document warning (once).
   useEffect(() => {
@@ -211,13 +235,17 @@ export function EditorView({ file, onClose }: EditorViewProps) {
   }
 
   function buildPayload(): { annotations: EditorAnnotation[]; formData: FormData } {
-    const fieldAnnotations: EditorAnnotation[] = formChanges.map((c) => ({
-      kind: "form_field",
-      page: 0,
-      field_name: c.name,
-      value: c.value,
-      id: newAnnotationId(),
-    }));
+    // Only fields whose live value differs from the document's own value.
+    const originals = new Map(formFields.map((f) => [f.name, f.value] as const));
+    const fieldAnnotations: EditorAnnotation[] = panelFields
+      .filter((f) => f.value !== (originals.get(f.name) ?? ""))
+      .map((f) => ({
+        kind: "form_field",
+        page: formFields.find((w) => w.name === f.name)?.page ?? 0,
+        field_name: f.name,
+        value: f.value,
+        id: newAnnotationId(),
+      }));
     const all = [...history.annotations, ...fieldAnnotations];
     const formData = new FormData();
     formData.append("file", file);
@@ -347,12 +375,15 @@ export function EditorView({ file, onClose }: EditorViewProps) {
                 signatureUrls={signatureUrls}
                 activeSignature={activeSignature}
                 dispatch={dispatch}
+                formFields={formFields.filter((f) => f.page === index)}
+                formValues={formValues}
+                onFormEdit={editFormField}
               />
             ))}
         </div>
 
         <aside className="w-full lg:w-80 lg:shrink-0">
-          <FormFieldsPanel file={file} onChange={setFormChanges} />
+          <FormFieldsPanel fields={panelFields} onEdit={editFormField} />
         </aside>
       </div>
 

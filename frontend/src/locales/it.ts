@@ -150,7 +150,7 @@ export const it = {
   "editor.signature.hint": "Clicca sulla pagina per posizionare la firma",
   "editor.form.title": "Campi modulo",
   "editor.form.hint":
-    "I valori modificati vengono scritti nel PDF al salvataggio.",
+    "Scrivi qui oppure clicca direttamente sul campo nella pagina: i valori compaiono subito e vengono scritti nel PDF al salvataggio.",
   "editor.save": "SALVA PDF",
   "editor.saved": "PDF salvato: download avviato.",
   "editor.confirm.title": "Redazione definitiva",

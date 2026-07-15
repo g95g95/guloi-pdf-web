@@ -21,11 +21,26 @@ export interface PdfPageInfo {
   height: number;
 }
 
+export interface FormFieldSpec {
+  name: string;
+  /** Current value stored in the PDF. */
+  value: string;
+  /** 0-based page of this widget. */
+  page: number;
+  /** Widget rect in PDF points, bottom-left origin, normalized [x0,y0,x1,y1]. */
+  rect: [number, number, number, number];
+}
+
 export type PdfDocumentState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error" }
-  | { status: "ready"; numPages: number; pages: PdfPageInfo[] };
+  | {
+      status: "ready";
+      numPages: number;
+      pages: PdfPageInfo[];
+      formFields: FormFieldSpec[];
+    };
 
 export interface UsePdfDocument {
   state: PdfDocumentState;
@@ -65,16 +80,42 @@ export function usePdfDocument(file: File | null): UsePdfDocument {
         const doc: PDFDocumentProxy = await task.promise;
         if (cancelled) return;
         const pages: PdfPageInfo[] = [];
+        const formFields: FormFieldSpec[] = [];
         for (let i = 1; i <= doc.numPages; i++) {
           const page = await doc.getPage(i);
           if (cancelled) return;
           pagesRef.current.set(i - 1, page);
           const viewport = page.getViewport({ scale: 1 });
           pages.push({ width: viewport.width, height: viewport.height });
+          // Editable text widgets: drawn as live inputs by PageView (the
+          // canvas render skips their appearance via ENABLE_FORMS below).
+          for (const a of await page.getAnnotations()) {
+            if (
+              a.subtype === "Widget" &&
+              a.fieldType === "Tx" &&
+              typeof a.fieldName === "string" &&
+              a.fieldName &&
+              !a.readOnly &&
+              Array.isArray(a.rect)
+            ) {
+              const [ax0, ay0, ax1, ay1] = a.rect as number[];
+              formFields.push({
+                name: a.fieldName,
+                value: typeof a.fieldValue === "string" ? a.fieldValue : "",
+                page: i - 1,
+                rect: [
+                  Math.min(ax0 ?? 0, ax1 ?? 0),
+                  Math.min(ay0 ?? 0, ay1 ?? 0),
+                  Math.max(ax0 ?? 0, ax1 ?? 0),
+                  Math.max(ay0 ?? 0, ay1 ?? 0),
+                ],
+              });
+            }
+          }
         }
         setResult({
           file,
-          state: { status: "ready", numPages: doc.numPages, pages },
+          state: { status: "ready", numPages: doc.numPages, pages, formFields },
         });
       } catch {
         if (!cancelled) setResult({ file, state: { status: "error" } });
@@ -101,7 +142,10 @@ export function usePdfDocument(file: File | null): UsePdfDocument {
       const viewport = page.getViewport({ scale: scale * dpr });
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
-      const task = page.render({ canvas, viewport });
+      // annotationMode 2 = AnnotationMode.ENABLE_FORMS: interactive form
+      // widgets are NOT painted on the canvas (PageView draws them as live
+      // inputs), while every other annotation appearance still renders.
+      const task = page.render({ canvas, viewport, annotationMode: 2 });
       tasksRef.current.set(index, task);
       try {
         await task.promise;

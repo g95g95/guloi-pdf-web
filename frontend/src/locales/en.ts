@@ -147,7 +147,8 @@ export const en: Messages = {
   "editor.signature.limit": "You can upload at most 10 signatures.",
   "editor.signature.hint": "Click on the page to place the signature",
   "editor.form.title": "Form fields",
-  "editor.form.hint": "Changed values are written into the PDF on save.",
+  "editor.form.hint":
+    "Type here or click the field on the page: values show up immediately and are written into the PDF on save.",
   "editor.save": "SAVE PDF",
   "editor.saved": "PDF saved: download started.",
   "editor.confirm.title": "Permanent redaction",

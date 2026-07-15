@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,9 @@ vi.mock("./usePdfDocument", () => ({
           pages: [
             { width: 600, height: 800 },
             { width: 600, height: 800 },
+          ],
+          formFields: [
+            { name: "nome", value: "", page: 0, rect: [100, 700, 300, 724] },
           ],
         }
       : { status: "idle" },
@@ -136,16 +139,15 @@ describe("Editor entry", () => {
     expect(screen.getByRole("heading", { name: "Editor PDF" })).toBeInTheDocument();
   });
 
-  it("queries the form fields endpoint for the loaded file", async () => {
+  it("shows the form fields from the document without extra network calls", async () => {
     const user = userEvent.setup();
     renderEditor();
     await user.upload(fileInput(), pdf());
     await screen.findByRole("toolbar");
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("/api/editor/fields");
-    expect(init.method).toBe("POST");
+    // Fields come from pdf.js widget annotations (mocked hook), not fetch.
+    expect(screen.getByRole("heading", { name: "Campi modulo" })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
