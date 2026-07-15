@@ -8,7 +8,7 @@ export type ToolState =
   | { status: "idle" }
   | { status: "uploading"; pct: number }
   | { status: "processing" }
-  | { status: "done"; blob: Blob; filename: string }
+  | { status: "done"; blob: Blob; filename: string; targetMet?: boolean }
   | { status: "error" };
 
 /** Map an UploadError to a user-facing message key. */
@@ -53,7 +53,12 @@ export function useToolUpload(endpoint: string) {
           setState(pct >= 100 ? { status: "processing" } : { status: "uploading", pct });
         });
         if (runId.current !== id) return;
-        setState({ status: "done", blob: result.blob, filename: result.filename });
+        setState({
+          status: "done",
+          blob: result.blob,
+          filename: result.filename,
+          ...(result.targetMet !== undefined ? { targetMet: result.targetMet } : {}),
+        });
       } catch (err) {
         if (runId.current !== id) return;
         const key = errorKey(err);

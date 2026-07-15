@@ -13,6 +13,8 @@ class CompressResult:
     compressed_size: int = 0
     output_path: Optional[Path] = None
     error: Optional[str] = None
+    # Set only by compress_to_target: whether the requested size was reached.
+    target_met: Optional[bool] = None
 
 
 def compress_pdf(
@@ -21,6 +23,7 @@ def compress_pdf(
     compress_images: bool = False,
     image_dpi: int = 150,
     image_quality: int = 75,
+    grayscale: bool = False,
 ) -> CompressResult:
     tmp = None
     original_source = source
@@ -30,7 +33,7 @@ def compress_pdf(
         original = source.stat().st_size
         output.parent.mkdir(parents=True, exist_ok=True)
 
-        if compress_images:
+        if compress_images or grayscale:
             tmp = output.with_name(output.stem + ".guloi_tmp.pdf")
             with pymupdf.open(str(source)) as doc:
                 doc.rewrite_images(
@@ -39,6 +42,7 @@ def compress_pdf(
                     quality=image_quality,
                     lossy=True,
                     lossless=True,
+                    set_to_gray=grayscale,
                 )
                 doc.save(str(tmp), garbage=3, deflate=True)
             source = tmp
@@ -69,3 +73,61 @@ def compress_pdf(
     finally:
         if tmp is not None:
             tmp.unlink(missing_ok=True)
+
+
+# Presets tried in order, from lightest to most aggressive. Quality/DPI are not
+# independently monotonic when combined freely, so a precomputed ladder is used
+# instead of a continuous search over two parameters — it is predictable and
+# each step is a real, testable compress_pdf() call.
+_TARGET_PRESETS = [
+    dict(image_quality=75, image_dpi=150, grayscale=False),
+    dict(image_quality=60, image_dpi=150, grayscale=False),
+    dict(image_quality=40, image_dpi=120, grayscale=False),
+    dict(image_quality=30, image_dpi=96, grayscale=False),
+    dict(image_quality=20, image_dpi=72, grayscale=False),
+    dict(image_quality=20, image_dpi=72, grayscale=True),
+]
+
+
+def compress_to_target(
+    source: Path,
+    output: Path,
+    target_bytes: int,
+) -> CompressResult:
+    """Compress source, walking an increasingly aggressive preset ladder until
+    the output is at or under target_bytes. Always returns the smallest result
+    found; target_met tells the caller whether the target was actually hit.
+
+    Starts from the lossless pass (no image recompression) since it is the
+    best-quality outcome and is often already enough.
+    """
+    best: Optional[CompressResult] = None
+
+    lossless = compress_pdf(source, output)
+    if not lossless.ok:
+        return lossless
+    if lossless.compressed_size <= target_bytes:
+        lossless.target_met = True
+        return lossless
+    best = lossless
+
+    for i, preset in enumerate(_TARGET_PRESETS):
+        candidate_path = output.with_name(f"{output.stem}.attempt{i}{output.suffix}")
+        result = compress_pdf(source, candidate_path, compress_images=True, **preset)
+        if not result.ok:
+            continue
+        if best is None or result.compressed_size < best.compressed_size:
+            if best is not None and best.output_path and best.output_path != output:
+                best.output_path.unlink(missing_ok=True)
+            best = result
+        else:
+            candidate_path.unlink(missing_ok=True)
+        if result.compressed_size <= target_bytes:
+            break
+
+    assert best is not None
+    if best.output_path != output:
+        best.output_path.replace(output)
+        best.output_path = output
+    best.target_met = best.compressed_size <= target_bytes
+    return best

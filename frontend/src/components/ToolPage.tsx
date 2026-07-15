@@ -39,7 +39,12 @@ export interface ToolPageProps {
    * action). Receives the total size of the submitted input files and the
    * result blob so a tool can show e.g. a compression savings readout.
    */
-  renderResultMeta?: (info: { inputBytes: number; blob: Blob }) => ReactNode;
+  renderResultMeta?: (info: {
+    inputBytes: number;
+    fileCount: number;
+    blob: Blob;
+    targetMet?: boolean;
+  }) => ReactNode;
 }
 
 /**
@@ -64,9 +69,11 @@ export function ToolPage({
   const t = useT();
   useDocumentMeta(`${t(titleKey)} · ${t("app.name")}`, t(descKey));
   const [files, setFiles] = useState<File[]>([]);
-  // Total size of the files submitted for the current run, captured at submit
-  // time so the result panel can compare input vs output (e.g. compression).
+  // Total size and count of the files submitted for the current run, captured
+  // at submit time so the result panel can compare input vs output (e.g.
+  // compression) and adjust its message for a single vs. multi-file result.
   const [inputBytes, setInputBytes] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
   const { state, submit, reset } = useToolUpload(endpoint);
 
   const busy = state.status === "uploading" || state.status === "processing";
@@ -93,6 +100,7 @@ export function ToolPage({
     const formData = buildFormData(files);
     if (formData) {
       setInputBytes(files.reduce((sum, f) => sum + f.size, 0));
+      setFileCount(files.length);
       void submit(formData);
     }
   }
@@ -132,7 +140,12 @@ export function ToolPage({
             <p className="text-sm text-fg">{t("tool.done")}</p>
             {renderResultMeta && (
               <p className="text-xs text-fg-muted">
-                {renderResultMeta({ inputBytes, blob: state.blob })}
+                {renderResultMeta({
+                  inputBytes,
+                  fileCount,
+                  blob: state.blob,
+                  ...(state.targetMet !== undefined ? { targetMet: state.targetMet } : {}),
+                })}
               </p>
             )}
             <Button

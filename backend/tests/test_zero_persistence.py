@@ -64,7 +64,7 @@ def _valid_files_kwargs(marker_bytes):
 # files_kwargs_fn(pdf_bytes) -> the `files=` argument for that endpoint.
 def _endpoint_matrix():
     return [
-        ("/api/compress", lambda b: {"file": (FILENAME_MARKER, b, "application/pdf")}, {}),
+        ("/api/compress", lambda b: {"files": (FILENAME_MARKER, b, "application/pdf")}, {}),
         (
             "/api/merge",
             lambda b: [
@@ -171,6 +171,8 @@ def test_no_temp_residue_corrupt_pdf_422_all_endpoints(client, fresh_tempdir):
                 ("files", (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")),
                 ("files", ("b_" + FILENAME_MARKER, CORRUPT_PDF, "application/pdf")),
             ]
+        elif path == "/api/compress":
+            files = {"files": (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")}
         else:
             files = {"file": (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")}
         r = client.post(path, files=files, data=data)
@@ -183,7 +185,7 @@ def test_no_temp_residue_non_pdf_415(client, fresh_tempdir):
     # 415 happens before staging, but assert no residue regardless.
     r = client.post(
         "/api/compress",
-        files={"file": (FILENAME_MARKER, NON_PDF, "application/pdf")},
+        files={"files": (FILENAME_MARKER, NON_PDF, "application/pdf")},
     )
     assert r.status_code == 415
     assert not _tree_entries(fresh_tempdir)
@@ -199,7 +201,7 @@ def test_no_temp_residue_on_forced_500(client, fresh_tempdir, monkeypatch):
     monkeypatch.setattr(compress_route, "compress_pdf", boom)
     r = client.post(
         "/api/compress",
-        files={"file": (FILENAME_MARKER, _make_pdf_bytes(), "application/pdf")},
+        files={"files": (FILENAME_MARKER, _make_pdf_bytes(), "application/pdf")},
     )
     assert r.status_code == 500
     residue = _tree_entries(fresh_tempdir)
@@ -229,7 +231,7 @@ def test_logs_never_contain_user_data(client, caplog, monkeypatch):
         # Happy path.
         r = client.post(
             "/api/compress",
-            files={"file": (FILENAME_MARKER, pdf, "application/pdf")},
+            files={"files": (FILENAME_MARKER, pdf, "application/pdf")},
         )
         assert r.status_code == 200
         _scan_records()
@@ -237,7 +239,7 @@ def test_logs_never_contain_user_data(client, caplog, monkeypatch):
         # 422 path.
         r = client.post(
             "/api/compress",
-            files={"file": (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")},
+            files={"files": (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")},
         )
         assert r.status_code == 422
         _scan_records()
@@ -252,7 +254,7 @@ def test_logs_never_contain_user_data(client, caplog, monkeypatch):
         monkeypatch.setattr(compress_route, "compress_pdf", boom)
         r = client.post(
             "/api/compress",
-            files={"file": (FILENAME_MARKER, pdf, "application/pdf")},
+            files={"files": (FILENAME_MARKER, pdf, "application/pdf")},
         )
         assert r.status_code == 500
         _scan_records()
@@ -283,7 +285,7 @@ def test_error_responses_never_echo_filename(client, monkeypatch):
     # 413 oversized (Content-Length lie), still carrying the marker filename.
     r413 = client.post(
         "/api/compress",
-        files={"file": (FILENAME_MARKER, pdf, "application/pdf")},
+        files={"files": (FILENAME_MARKER, pdf, "application/pdf")},
         headers={"Content-Length": str(config.MAX_UPLOAD_BYTES + 1)},
     )
     assert r413.status_code == 413
@@ -292,7 +294,7 @@ def test_error_responses_never_echo_filename(client, monkeypatch):
     # 415 non-pdf.
     r415 = client.post(
         "/api/compress",
-        files={"file": (FILENAME_MARKER, NON_PDF, "application/pdf")},
+        files={"files": (FILENAME_MARKER, NON_PDF, "application/pdf")},
     )
     assert r415.status_code == 415
     assert FILENAME_MARKER not in r415.text
@@ -300,7 +302,7 @@ def test_error_responses_never_echo_filename(client, monkeypatch):
     # 422 corrupt.
     r422 = client.post(
         "/api/compress",
-        files={"file": (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")},
+        files={"files": (FILENAME_MARKER, CORRUPT_PDF, "application/pdf")},
     )
     assert r422.status_code == 422
     assert FILENAME_MARKER not in r422.text
@@ -312,7 +314,7 @@ def test_error_responses_never_echo_filename(client, monkeypatch):
     monkeypatch.setattr(compress_route, "compress_pdf", boom)
     r500 = client.post(
         "/api/compress",
-        files={"file": (FILENAME_MARKER, pdf, "application/pdf")},
+        files={"files": (FILENAME_MARKER, pdf, "application/pdf")},
     )
     assert r500.status_code == 500
     assert FILENAME_MARKER not in r500.text

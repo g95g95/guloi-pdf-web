@@ -68,6 +68,15 @@ export const it = {
   "compress.action": "COMPRIMI",
   "compress.images": "Comprimi anche le immagini (riduce la qualità)",
   "compress.result": "Prima: {before} KB · Dopo: {after} KB · Risparmio: {saved}%",
+  "compress.mode": "Modalità di compressione",
+  "compress.mode.simple": "Modalità semplice",
+  "compress.mode.target": "Dimensione desiderata",
+  "compress.target.label": "Dimensione massima",
+  "compress.target.notMet":
+    "Non è stato possibile scendere sotto {target} MB. Dimensione ottenuta: {after} KB.",
+  "compress.target.notMetMulti":
+    "Almeno un file non è sceso sotto {target} MB: nello ZIP è segnato con \"_TARGET_NON_RAGGIUNTO\".",
+  "compress.hint": "Puoi caricare più PDF: verranno compressi separatamente e restituiti in uno ZIP.",
 
   // Merge
   "merge.action": "UNISCI",

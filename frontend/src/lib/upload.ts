@@ -26,6 +26,8 @@ export class UploadError extends Error {
 export interface UploadResult {
   blob: Blob;
   filename: string;
+  /** Parsed from X-Target-Met, when the request used a target-size compress. */
+  targetMet?: boolean;
 }
 
 /** Extract the filename from a Content-Disposition header, if any. */
@@ -74,9 +76,11 @@ export function uploadWithProgress(
     xhr.onload = () => {
       const blob = xhr.response as Blob;
       if (xhr.status >= 200 && xhr.status < 300) {
+        const targetMetHeader = xhr.getResponseHeader("X-Target-Met");
         resolve({
           blob,
           filename: parseFilename(xhr.getResponseHeader("Content-Disposition")),
+          ...(targetMetHeader !== null ? { targetMet: targetMetHeader === "true" } : {}),
         });
         return;
       }

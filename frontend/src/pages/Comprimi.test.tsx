@@ -89,6 +89,62 @@ describe("Comprimi page", () => {
     expect(screen.getByText(/Risparmio: 50%/)).toBeInTheDocument();
   });
 
+  it("switches to target mode and sends target_mb instead of compress_images", async () => {
+    const user = userEvent.setup();
+    uploadMock.mockResolvedValue({
+      blob: new Blob(["ok"], { type: "application/pdf" }),
+      filename: "compresso.pdf",
+      targetMet: true,
+    });
+    renderPage(<Comprimi />);
+
+    await user.upload(fileInput(), pdf());
+    await user.click(screen.getByRole("radio", { name: /dimensione desiderata/i }));
+    expect(screen.getByRole("slider")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "COMPRIMI" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /scarica/i })).toBeInTheDocument(),
+    );
+    const sentFormData = uploadMock.mock.calls[0]?.[1] as FormData;
+    expect(sentFormData.has("target_mb")).toBe(true);
+    expect(sentFormData.has("compress_images")).toBe(false);
+  });
+
+  it("shows a warning when the target size could not be met", async () => {
+    const user = userEvent.setup();
+    const out = new Blob([new Uint8Array(2048)], { type: "application/pdf" });
+    uploadMock.mockResolvedValue({ blob: out, filename: "compresso.pdf", targetMet: false });
+    renderPage(<Comprimi />);
+
+    await user.upload(fileInput(), pdf());
+    await user.click(screen.getByRole("radio", { name: /dimensione desiderata/i }));
+    await user.click(screen.getByRole("button", { name: "COMPRIMI" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/non è stato possibile scendere sotto/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("accepts multiple files and sends them all under the files field", async () => {
+    const user = userEvent.setup();
+    uploadMock.mockResolvedValue({
+      blob: new Blob(["ok"], { type: "application/zip" }),
+      filename: "compressi.zip",
+    });
+    renderPage(<Comprimi />);
+
+    await user.upload(fileInput(), [pdf("a.pdf"), pdf("b.pdf")]);
+    await user.click(screen.getByRole("button", { name: "COMPRIMI" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /scarica/i })).toBeInTheDocument(),
+    );
+    const sentFormData = uploadMock.mock.calls[0]?.[1] as FormData;
+    expect(sentFormData.getAll("files")).toHaveLength(2);
+  });
+
   it("shows the too-large toast on a 413 error", async () => {
     const user = userEvent.setup();
     uploadMock.mockRejectedValue(new UploadError("too big", 413));

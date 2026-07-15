@@ -3,7 +3,7 @@ import os
 import pymupdf
 from PIL import Image
 
-from core.compress import compress_pdf, CompressResult
+from core.compress import compress_pdf, compress_to_target, CompressResult
 
 
 def _image_heavy_pdf(tmp_path):
@@ -46,6 +46,57 @@ def test_compress_produces_smaller_or_equal(tmp_path, tiny_pdf):
     assert result.compressed_size > 0
 
 
+def test_compress_missing_source(tmp_path):
+    out = tmp_path / "c.pdf"
+    result = compress_pdf(tmp_path / "nope.pdf", out)
+    assert result.ok is False
+
+
+def test_compress_to_target_already_met_by_lossless(tmp_path, tiny_pdf):
+    src = tiny_pdf("src.pdf", pages=2)
+    out = tmp_path / "out.pdf"
+    # Generous target: the plain lossless pass alone should already fit.
+    result = compress_to_target(src, out, target_bytes=1_000_000)
+    assert result.ok is True
+    assert result.target_met is True
+    assert out.exists()
+    with pymupdf.open(str(out)) as doc:
+        assert doc.page_count == 2
+
+
+def test_compress_to_target_reachable_via_image_recompression(tmp_path):
+    src = _image_heavy_pdf(tmp_path)
+    out = tmp_path / "out.pdf"
+    original = src.stat().st_size
+    # Below the lossless size but reachable once images are recompressed.
+    target = int(original * 0.3)
+    result = compress_to_target(src, out, target_bytes=target)
+    assert result.ok is True
+    assert result.target_met is True
+    assert result.compressed_size <= target
+    with pymupdf.open(str(out)) as doc:
+        assert doc.page_count == 1
+
+
+def test_compress_to_target_unreachable_returns_smallest_with_flag(tmp_path):
+    src = _image_heavy_pdf(tmp_path)
+    out = tmp_path / "out.pdf"
+    result = compress_to_target(src, out, target_bytes=1)
+    assert result.ok is True
+    assert result.target_met is False
+    assert result.compressed_size > 0
+    assert out.exists()
+    with pymupdf.open(str(out)) as doc:
+        assert doc.page_count == 1
+
+
+def test_compress_to_target_missing_source(tmp_path):
+    out = tmp_path / "c.pdf"
+    result = compress_to_target(tmp_path / "nope.pdf", out, target_bytes=1000)
+    assert result.ok is False
+    assert result.target_met is None
+
+
 def _text_heavy_pdf(tmp_path):
     """PDF con un content stream grosso NON compresso (come l'output editor)."""
     import pikepdf
@@ -77,22 +128,13 @@ def test_lossless_recompresses_raw_content_streams(tmp_path):
     out = tmp_path / "out.pdf"
     result = compress_pdf(src, out)
     assert result.ok is True
-    assert result.compressed_size < result.original_size * 0.5, (
-        f"content stream non ricompresso: {result.original_size} -> "
-        f"{result.compressed_size}"
-    )
+    assert result.compressed_size < result.original_size * 0.5
 
 
 def test_compress_never_returns_larger_file(tmp_path, tiny_pdf):
-    """Se il 'compresso' è più grande dell'originale, tieni l'originale."""
+    """Se il 'compresso' e' piu' grande dell'originale, tieni l'originale."""
     src = tiny_pdf("gia_ottimo.pdf", pages=1)
     out = tmp_path / "out.pdf"
     result = compress_pdf(src, out)
     assert result.ok is True
     assert result.compressed_size <= result.original_size
-
-
-def test_compress_missing_source(tmp_path):
-    out = tmp_path / "c.pdf"
-    result = compress_pdf(tmp_path / "nope.pdf", out)
-    assert result.ok is False

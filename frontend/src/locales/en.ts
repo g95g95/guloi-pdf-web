@@ -66,6 +66,15 @@ export const en: Messages = {
   "compress.action": "COMPRESS",
   "compress.images": "Compress images too (reduces quality)",
   "compress.result": "Before: {before} KB · After: {after} KB · Saved: {saved}%",
+  "compress.mode": "Compression mode",
+  "compress.mode.simple": "Simple mode",
+  "compress.mode.target": "Target size",
+  "compress.target.label": "Maximum size",
+  "compress.target.notMet":
+    "Could not get below {target} MB. Size achieved: {after} KB.",
+  "compress.target.notMetMulti":
+    "At least one file did not get below {target} MB: it's marked \"_TARGET_NON_RAGGIUNTO\" in the ZIP.",
+  "compress.hint": "You can upload multiple PDFs: they'll be compressed separately and returned as a ZIP.",
 
   // Merge
   "merge.action": "MERGE",
