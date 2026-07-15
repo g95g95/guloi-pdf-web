@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
 COPY backend/core ./core
+COPY backend/editor ./editor
 
 # Built frontend assets, served by FastAPI as the SPA shell.
 COPY --from=frontend-build /app/frontend/dist ./static
